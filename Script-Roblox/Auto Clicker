@@ -1,0 +1,223 @@
+print("Hello, World!");
+-- Auto Click + Anti AFK + Smart Pause + Rejoin Same Server
+-- CTRL = Toggle UI
+-- F    = Toggle Auto Click
+
+-- =========================
+-- Services
+-- =========================
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
+local GuiService = game:GetService("GuiService")
+
+local player = Players.LocalPlayer
+
+-- =========================
+-- Anti AFK
+-- =========================
+player.Idled:Connect(function()
+	VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+	task.wait(1)
+	VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
+
+-- =========================
+-- State
+-- =========================
+local autoClick = false
+local intervalMs = 50
+local uiVisible = true
+
+-- =========================
+-- UI
+-- =========================
+local gui = Instance.new("ScreenGui")
+gui.Name = "AutoClickGUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 240, 0, 170)
+frame.Position = UDim2.new(0, 40, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(28,28,28)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,8)
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,32)
+title.BackgroundTransparency = 1
+title.Text = "STUNT | Auto Clicker"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = frame
+
+-- Indicator dot
+local dot = Instance.new("Frame")
+dot.Size = UDim2.new(0,10,0,10)
+dot.Position = UDim2.new(1,-20,0,11)
+dot.BackgroundColor3 = Color3.fromRGB(255,80,80)
+dot.Parent = frame
+Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
+
+-- Status text
+local status = Instance.new("TextLabel")
+status.Position = UDim2.new(0,0,0,36)
+status.Size = UDim2.new(1,0,0,20)
+status.BackgroundTransparency = 1
+status.Text = "Status: OFF"
+status.TextColor3 = Color3.fromRGB(255,120,120)
+status.Font = Enum.Font.Gotham
+status.TextSize = 12
+status.Parent = frame
+
+-- Interval input
+local inputBox = Instance.new("TextBox")
+inputBox.Position = UDim2.new(0.1,0,0,62)
+inputBox.Size = UDim2.new(0.8,0,0,30)
+inputBox.PlaceholderText = "Interval (ms)"
+inputBox.Text = tostring(intervalMs)
+inputBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
+inputBox.TextColor3 = Color3.new(1,1,1)
+inputBox.Font = Enum.Font.Gotham
+inputBox.TextSize = 12
+inputBox.ClearTextOnFocus = false
+inputBox.Parent = frame
+Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,6)
+
+-- Rejoin button
+local rejoinBtn = Instance.new("TextButton")
+rejoinBtn.Position = UDim2.new(0.2,0,0,102)
+rejoinBtn.Size = UDim2.new(0.6,0,0,28)
+rejoinBtn.Text = "Rejoin This Server"
+rejoinBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
+rejoinBtn.TextColor3 = Color3.new(1,1,1)
+rejoinBtn.Font = Enum.Font.GothamBold
+rejoinBtn.TextSize = 12
+rejoinBtn.Parent = frame
+Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0,6)
+
+-- Hint
+local hint = Instance.new("TextLabel")
+hint.Position = UDim2.new(0,0,1,-26)
+hint.Size = UDim2.new(1,0,0,26)
+hint.BackgroundTransparency = 1
+hint.Text = "F = Toggle | CTRL = UI"
+hint.TextColor3 = Color3.fromRGB(170,170,170)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 11
+hint.Parent = frame
+
+-- =========================
+-- Drag UI
+-- =========================
+do
+	local dragging, dragStart, startPos
+
+	title.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = false
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
+end
+
+-- =========================
+-- Helpers
+-- =========================
+local function updateStatus()
+	if autoClick then
+		status.Text = "Status: ON"
+		status.TextColor3 = Color3.fromRGB(120,255,120)
+		dot.BackgroundColor3 = Color3.fromRGB(120,255,120)
+	else
+		status.Text = "Status: OFF"
+		status.TextColor3 = Color3.fromRGB(255,120,120)
+		dot.BackgroundColor3 = Color3.fromRGB(255,80,80)
+	end
+end
+
+-- Smart check
+local function canAutoClick()
+	-- Pause kalau menu Roblox kebuka (ESC, Settings, PlayerList)
+	if GuiService.MenuIsOpen then
+		return false
+	end
+
+	-- Pause kalau lagi ngetik (chat / textbox)
+	if UserInputService:GetFocusedTextBox() then
+		return false
+	end
+
+	return true
+end
+
+-- =========================
+-- Input Handling
+-- =========================
+UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		uiVisible = not uiVisible
+		gui.Enabled = uiVisible
+	end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		autoClick = not autoClick
+		updateStatus()
+	end
+end)
+
+inputBox.FocusLost:Connect(function()
+	local v = tonumber(inputBox.Text)
+	if v and v > 0 then
+		intervalMs = v
+	else
+		inputBox.Text = tostring(intervalMs)
+	end
+end)
+
+-- Rejoin same server
+rejoinBtn.MouseButton1Click:Connect(function()
+	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+end)
+
+-- =========================
+-- Smart Auto Click Loop
+-- =========================
+task.spawn(function()
+	while true do
+		if autoClick and canAutoClick() then
+			VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
+			VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+		end
+		task.wait(intervalMs / 1000)
+	end
+end)
