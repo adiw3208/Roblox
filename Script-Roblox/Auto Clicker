@@ -93,7 +93,7 @@ gui.IgnoreGuiInset = true
 gui.ResetOnSpawn = false
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0, 360, 0, 460)
+frame.Size = UDim2.new(0, 360, 0, 480)
 frame.Position = UDim2.new(0, 40, 0.3, 0)
 frame.BackgroundColor3 = Color3.fromRGB(22,22,22)
 frame.BackgroundTransparency = 0.15
@@ -188,9 +188,21 @@ local function input(parent, txt, y)
 end
 
 -- =========================
+-- TITLE
+-- =========================
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,0,0,32)
+title.BackgroundTransparency = 1
+title.Text = "STUNT | AutoClicker"
+title.TextColor3 = Color3.new(1,1,1)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = frame
+
+-- =========================
 -- STATUS
 -- =========================
-local statusCard = card(10,130)
+local statusCard = card(30,130)
 label(statusCard,"STATUS",6,true)
 local fpsLabel = label(statusCard,"FPS: 0",28)
 local sAuto = label(statusCard,"AutoClick: OFF",46)
@@ -201,6 +213,7 @@ local sGfx  = label(statusCard,"Low Graphics: OFF",82)
 local hint = label(statusCard,"[ F ] Auto Click   |   [ CTRL ] Toggle UI",100)
 hint.TextColor3 = Color3.fromRGB(180,180,180)
 hint.TextSize = 11
+
 
 
 -- =========================
@@ -225,7 +238,7 @@ local jBtn, setJump = toggle(mvCard,"Infinite Jump",88,false)
 -- =========================
 -- SYSTEM
 -- =========================
-local sysCard = card(370,80)
+local sysCard = card(370,90)
 label(sysCard,"SYSTEM",6,true)
 local gfxBtn, setGfx = toggle(sysCard,"Low Graphics",28,false)
 
