@@ -1,4 +1,4 @@
--- STUNT | Smart AutoClick + Anti AFK + Low Graphics Toggle + FPS
+-- STUNT | Smart Utility Panel (Final Fixed)
 -- F    = Toggle Auto Click
 -- CTRL = Toggle UI
 
@@ -6,14 +6,12 @@
 -- Services
 -- =========================
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local TeleportService = game:GetService("TeleportService")
-local GuiService = game:GetService("GuiService")
+local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local VIM = game:GetService("VirtualInputManager")
+local TeleportService = game:GetService("TeleportService")
 local Lighting = game:GetService("Lighting")
-local Terrain = workspace:FindFirstChildOfClass("Terrain")
 
 local player = Players.LocalPlayer
 
@@ -31,13 +29,31 @@ end)
 -- =========================
 local autoClick = false
 local intervalMs = 50
-local uiVisible = true
+
+local walkEnabled = false
+local walkSpeed = 16
+local infJump = false
+
 local lowGraphics = false
+local uiVisible = true
 
 -- =========================
--- Save Original Graphics
+-- FPS
 -- =========================
-local originalGraphics = {
+local fps, frames, last = 0, 0, tick()
+RunService.RenderStepped:Connect(function()
+	frames += 1
+	if tick() - last >= 1 then
+		fps = frames
+		frames = 0
+		last = tick()
+	end
+end)
+
+-- =========================
+-- Low Graphics
+-- =========================
+local originalLighting = {
 	GlobalShadows = Lighting.GlobalShadows,
 	Brightness = Lighting.Brightness,
 	EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
@@ -45,272 +61,257 @@ local originalGraphics = {
 	OutdoorAmbient = Lighting.OutdoorAmbient
 }
 
--- =========================
--- Graphics Functions
--- =========================
 local function applyLowGraphics()
 	Lighting.GlobalShadows = false
 	Lighting.Brightness = 1
 	Lighting.EnvironmentDiffuseScale = 0
 	Lighting.EnvironmentSpecularScale = 0
 	Lighting.OutdoorAmbient = Color3.new(0.5,0.5,0.5)
-
-	for _, v in ipairs(Lighting:GetChildren()) do
-		if v:IsA("PostEffect") then
-			v.Enabled = false
-		end
+	for _,v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("PostEffect") then v.Enabled = false end
 	end
-
-	if Terrain then
-		Terrain.WaterWaveSize = 0
-		Terrain.WaterWaveSpeed = 0
-		Terrain.WaterReflectance = 0
-		Terrain.WaterTransparency = 1
-	end
-
 	pcall(function()
 		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
 	end)
 end
 
 local function restoreGraphics()
-	Lighting.GlobalShadows = originalGraphics.GlobalShadows
-	Lighting.Brightness = originalGraphics.Brightness
-	Lighting.EnvironmentDiffuseScale = originalGraphics.EnvironmentDiffuseScale
-	Lighting.EnvironmentSpecularScale = originalGraphics.EnvironmentSpecularScale
-	Lighting.OutdoorAmbient = originalGraphics.OutdoorAmbient
-
-	for _, v in ipairs(Lighting:GetChildren()) do
-		if v:IsA("PostEffect") then
-			v.Enabled = true
-		end
+	for k,v in pairs(originalLighting) do Lighting[k] = v end
+	for _,v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("PostEffect") then v.Enabled = true end
 	end
-
 	pcall(function()
 		settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
 	end)
 end
 
 -- =========================
--- UI
+-- UI Base
 -- =========================
-local gui = Instance.new("ScreenGui")
-gui.Name = "AutoClickGUI"
-gui.ResetOnSpawn = false
+local gui = Instance.new("ScreenGui", player.PlayerGui)
 gui.IgnoreGuiInset = true
-gui.Parent = player:WaitForChild("PlayerGui")
+gui.ResetOnSpawn = false
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0,240,0,220)
-frame.Position = UDim2.new(0,40,0.4,0)
-frame.BackgroundColor3 = Color3.fromRGB(28,28,28)
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 360, 0, 460)
+frame.Position = UDim2.new(0, 40, 0.3, 0)
+frame.BackgroundColor3 = Color3.fromRGB(22,22,22)
+frame.BackgroundTransparency = 0.15
 frame.BorderSizePixel = 0
 frame.Active = true
-frame.Parent = gui
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0,8)
-
--- Title
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,0,0,32)
-title.BackgroundTransparency = 1
-title.Text = "STUNT | Smart AutoClick"
-title.TextColor3 = Color3.new(1,1,1)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 14
-title.Parent = frame
-
--- Dot
-local dot = Instance.new("Frame")
-dot.Size = UDim2.new(0,10,0,10)
-dot.Position = UDim2.new(1,-20,0,11)
-dot.BackgroundColor3 = Color3.fromRGB(255,80,80)
-dot.Parent = frame
-Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
-
--- Status
-local status = Instance.new("TextLabel")
-status.Position = UDim2.new(0,0,0,36)
-status.Size = UDim2.new(1,0,0,20)
-status.BackgroundTransparency = 1
-status.Text = "Status: OFF"
-status.TextColor3 = Color3.fromRGB(255,120,120)
-status.Font = Enum.Font.Gotham
-status.TextSize = 12
-status.Parent = frame
-
--- FPS
-local fpsLabel = Instance.new("TextLabel")
-fpsLabel.Position = UDim2.new(0,0,0,56)
-fpsLabel.Size = UDim2.new(1,0,0,20)
-fpsLabel.BackgroundTransparency = 1
-fpsLabel.Text = "FPS: --"
-fpsLabel.Font = Enum.Font.Gotham
-fpsLabel.TextSize = 12
-fpsLabel.TextColor3 = Color3.fromRGB(120,255,120)
-fpsLabel.Parent = frame
-
--- Interval
-local inputBox = Instance.new("TextBox")
-inputBox.Position = UDim2.new(0.1,0,0,82)
-inputBox.Size = UDim2.new(0.8,0,0,30)
-inputBox.Text = tostring(intervalMs)
-inputBox.PlaceholderText = "Interval (ms)"
-inputBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
-inputBox.TextColor3 = Color3.new(1,1,1)
-inputBox.Font = Enum.Font.Gotham
-inputBox.TextSize = 12
-inputBox.ClearTextOnFocus = false
-inputBox.Parent = frame
-Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,6)
-
--- Rejoin
-local rejoinBtn = Instance.new("TextButton")
-rejoinBtn.Position = UDim2.new(0.2,0,0,122)
-rejoinBtn.Size = UDim2.new(0.6,0,0,28)
-rejoinBtn.Text = "Rejoin This Server"
-rejoinBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-rejoinBtn.TextColor3 = Color3.new(1,1,1)
-rejoinBtn.Font = Enum.Font.GothamBold
-rejoinBtn.TextSize = 12
-rejoinBtn.Parent = frame
-Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0,6)
-
--- Low Graphics Toggle
-local gfxBtn = Instance.new("TextButton")
-gfxBtn.Position = UDim2.new(0.2,0,0,154)
-gfxBtn.Size = UDim2.new(0.6,0,0,28)
-gfxBtn.Text = "Low Graphics: OFF"
-gfxBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
-gfxBtn.TextColor3 = Color3.new(1,1,1)
-gfxBtn.Font = Enum.Font.GothamBold
-gfxBtn.TextSize = 12
-gfxBtn.Parent = frame
-Instance.new("UICorner", gfxBtn).CornerRadius = UDim.new(0,6)
-
--- Hint
-local hint = Instance.new("TextLabel")
-hint.Position = UDim2.new(0,0,1,-26)
-hint.Size = UDim2.new(1,0,0,26)
-hint.BackgroundTransparency = 1
-hint.Text = "F = Toggle | CTRL = UI"
-hint.TextColor3 = Color3.fromRGB(170,170,170)
-hint.Font = Enum.Font.Gotham
-hint.TextSize = 11
-hint.Parent = frame
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
 
 -- =========================
 -- Drag
 -- =========================
 do
-	local dragging, dragStart, startPos
-	title.InputBegan:Connect(function(i)
+	local drag, start, pos
+	frame.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			dragStart = i.Position
-			startPos = frame.Position
+			drag = true
+			start = i.Position
+			pos = frame.Position
 		end
 	end)
-	UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
 	end)
-	UserInputService.InputChanged:Connect(function(i)
-		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-			local d = i.Position - dragStart
-			frame.Position = UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
+	UIS.InputChanged:Connect(function(i)
+		if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+			local d = i.Position - start
+			frame.Position = UDim2.new(pos.X.Scale,pos.X.Offset+d.X,pos.Y.Scale,pos.Y.Offset+d.Y)
 		end
 	end)
 end
 
 -- =========================
--- Helpers
+-- UI Helpers
 -- =========================
-local function updateStatus()
-	if autoClick then
-		status.Text = "Status: ON"
-		status.TextColor3 = Color3.fromRGB(120,255,120)
-		dot.BackgroundColor3 = Color3.fromRGB(120,255,120)
-	else
-		status.Text = "Status: OFF"
-		status.TextColor3 = Color3.fromRGB(255,120,120)
-		dot.BackgroundColor3 = Color3.fromRGB(255,80,80)
-	end
+local function card(y, h)
+	local c = Instance.new("Frame", frame)
+	c.Size = UDim2.new(1,-20,0,h)
+	c.Position = UDim2.new(0,10,0,y)
+	c.BackgroundColor3 = Color3.fromRGB(30,30,30)
+	c.BackgroundTransparency = 0.05
+	Instance.new("UICorner", c).CornerRadius = UDim.new(0,10)
+	return c
 end
 
-local function canAutoClick()
-	if GuiService.MenuIsOpen then return false end
-	if UserInputService:GetFocusedTextBox() then return false end
-	return true
+local function label(parent, txt, y, bold)
+	local l = Instance.new("TextLabel", parent)
+	l.Size = UDim2.new(1,-16,0,18)
+	l.Position = UDim2.new(0,8,0,y)
+	l.BackgroundTransparency = 1
+	l.TextXAlignment = Enum.TextXAlignment.Left
+	l.Text = txt
+	l.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
+	l.TextSize = 12
+	l.TextColor3 = Color3.fromRGB(230,230,230)
+	return l
+end
+
+-- 🔥 FIXED TOGGLE (AUTO INIT)
+local function toggle(parent, txt, y, default)
+	local b = Instance.new("TextButton", parent)
+	b.Size = UDim2.new(1,-16,0,26)
+	b.Position = UDim2.new(0,8,0,y)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 12
+	b.TextColor3 = Color3.new(1,1,1)
+	Instance.new("UICorner", b).CornerRadius = UDim.new(0,6)
+
+	local function set(state)
+		b.Text = txt .. ": " .. (state and "ON" or "OFF")
+		b.BackgroundColor3 = state
+			and Color3.fromRGB(60,140,80)
+			or Color3.fromRGB(70,70,70)
+	end
+
+	-- ✅ INIT LANGSUNG
+	set(default or false)
+
+	return b, set
+end
+
+local function input(parent, txt, y)
+	local i = Instance.new("TextBox", parent)
+	i.Size = UDim2.new(1,-16,0,26)
+	i.Position = UDim2.new(0,8,0,y)
+	i.Text = txt
+	i.ClearTextOnFocus = false
+	i.Font = Enum.Font.Gotham
+	i.TextSize = 12
+	i.BackgroundColor3 = Color3.fromRGB(45,45,45)
+	i.TextColor3 = Color3.new(1,1,1)
+	Instance.new("UICorner", i).CornerRadius = UDim.new(0,6)
+	return i
 end
 
 -- =========================
--- Input
+-- STATUS
 -- =========================
-UserInputService.InputBegan:Connect(function(i,gpe)
-	if gpe then return end
-	if i.KeyCode == Enum.KeyCode.F then
-		autoClick = not autoClick
-		updateStatus()
-	elseif i.KeyCode == Enum.KeyCode.LeftControl then
-		uiVisible = not uiVisible
-		gui.Enabled = uiVisible
-	end
+local statusCard = card(10,130)
+label(statusCard,"STATUS",6,true)
+local fpsLabel = label(statusCard,"FPS: 0",28)
+local sAuto = label(statusCard,"AutoClick: OFF",46)
+local sMove = label(statusCard,"Movement: OFF",64)
+local sGfx  = label(statusCard,"Low Graphics: OFF",82)
+
+-- HINT HOTKEY
+local hint = label(statusCard,"[ F ] Auto Click   |   [ CTRL ] Toggle UI",100)
+hint.TextColor3 = Color3.fromRGB(180,180,180)
+hint.TextSize = 11
+
+
+-- =========================
+-- AUTO CLICK
+-- =========================
+local acCard = card(130,100)
+label(acCard,"AUTO CLICK",6,true)
+local acBtn, setAC = toggle(acCard,"Auto Click",28,false)
+local acInput = input(acCard,"Interval (ms)",58)
+acInput.Text = tostring(intervalMs)
+
+-- =========================
+-- MOVEMENT
+-- =========================
+local mvCard = card(240,120)
+label(mvCard,"MOVEMENT",6,true)
+local wsInput = input(mvCard,"WalkSpeed",28)
+wsInput.Text = tostring(walkSpeed)
+local wsBtn, setWS = toggle(mvCard,"WalkSpeed",58,false)
+local jBtn, setJump = toggle(mvCard,"Infinite Jump",88,false)
+
+-- =========================
+-- SYSTEM
+-- =========================
+local sysCard = card(370,80)
+label(sysCard,"SYSTEM",6,true)
+local gfxBtn, setGfx = toggle(sysCard,"Low Graphics",28,false)
+
+local rj = Instance.new("TextButton", sysCard)
+rj.Size = UDim2.new(1,-16,0,26)
+rj.Position = UDim2.new(0,8,0,58)
+rj.Text = "Rejoin Server"
+rj.Font = Enum.Font.GothamBold
+rj.TextSize = 12
+rj.BackgroundColor3 = Color3.fromRGB(90,90,90)
+rj.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", rj).CornerRadius = UDim.new(0,6)
+
+-- =========================
+-- Logic
+-- =========================
+acBtn.MouseButton1Click:Connect(function()
+	autoClick = not autoClick
+	setAC(autoClick)
 end)
 
-inputBox.FocusLost:Connect(function()
-	local v = tonumber(inputBox.Text)
-	if v and v > 0 then intervalMs = v else inputBox.Text = tostring(intervalMs) end
+wsBtn.MouseButton1Click:Connect(function()
+	walkEnabled = not walkEnabled
+	setWS(walkEnabled)
 end)
 
-rejoinBtn.MouseButton1Click:Connect(function()
-	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+jBtn.MouseButton1Click:Connect(function()
+	infJump = not infJump
+	setJump(infJump)
 end)
 
 gfxBtn.MouseButton1Click:Connect(function()
 	lowGraphics = not lowGraphics
-	if lowGraphics then
-		applyLowGraphics()
-		gfxBtn.Text = "Low Graphics: ON"
-		gfxBtn.BackgroundColor3 = Color3.fromRGB(60,120,60)
-	else
-		restoreGraphics()
-		gfxBtn.Text = "Low Graphics: OFF"
-		gfxBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+	setGfx(lowGraphics)
+	if lowGraphics then applyLowGraphics() else restoreGraphics() end
+end)
+
+acInput.FocusLost:Connect(function()
+	local v = tonumber(acInput.Text)
+	if v and v > 0 then intervalMs = v end
+end)
+
+wsInput.FocusLost:Connect(function()
+	local v = tonumber(wsInput.Text)
+	if v then walkSpeed = v end
+end)
+
+rj.MouseButton1Click:Connect(function()
+	TeleportService:TeleportToPlaceInstance(game.PlaceId,game.JobId,player)
+end)
+
+UIS.InputBegan:Connect(function(i,gpe)
+	if gpe then return end
+	if i.KeyCode == Enum.KeyCode.LeftControl then
+		uiVisible = not uiVisible
+		gui.Enabled = uiVisible
+	end
+	if i.KeyCode == Enum.KeyCode.F then
+		autoClick = not autoClick
+		setAC(autoClick)
+	end
+	if infJump and i.KeyCode == Enum.KeyCode.Space then
+		local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+		if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
 	end
 end)
 
 -- =========================
--- Auto Click Loop
+-- Runtime
 -- =========================
+RunService.Heartbeat:Connect(function()
+	fpsLabel.Text = "FPS: "..fps
+	sAuto.Text = "AutoClick: "..(autoClick and "ON" or "OFF")
+	sMove.Text = "Movement: "..((walkEnabled or infJump) and "ON" or "OFF")
+	sGfx.Text  = "Low Graphics: "..(lowGraphics and "ON" or "OFF")
+
+	local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if h then h.WalkSpeed = walkEnabled and walkSpeed or 16 end
+end)
+
 task.spawn(function()
 	while true do
-		if autoClick and canAutoClick() then
-			VirtualInputManager:SendMouseButtonEvent(0,0,0,true,game,0)
-			VirtualInputManager:SendMouseButtonEvent(0,0,0,false,game,0)
+		if autoClick then
+			VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+			VIM:SendMouseButtonEvent(0,0,0,false,game,0)
 		end
-		task.wait(intervalMs / 1000)
+		task.wait(intervalMs/1000)
 	end
 end)
-
--- =========================
--- FPS Counter
--- =========================
-do
-	local frames = 0
-	local last = tick()
-	RunService.RenderStepped:Connect(function()
-		frames += 1
-		if tick() - last >= 0.5 then
-			local fps = math.floor(frames / (tick() - last))
-			frames = 0
-			last = tick()
-			fpsLabel.Text = "FPS: "..fps
-			if fps >= 60 then
-				fpsLabel.TextColor3 = Color3.fromRGB(120,255,120)
-			elseif fps >= 40 then
-				fpsLabel.TextColor3 = Color3.fromRGB(255,200,80)
-			else
-				fpsLabel.TextColor3 = Color3.fromRGB(255,90,90)
-			end
-		end
-	end)
-end
