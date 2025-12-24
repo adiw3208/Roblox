@@ -1,7 +1,6 @@
-print("Hello, World!");
--- Auto Click + Anti AFK + Smart Pause + Rejoin Same Server
--- CTRL = Toggle UI
+-- STUNT | Smart AutoClick + Anti AFK + Low Graphics Toggle + FPS
 -- F    = Toggle Auto Click
+-- CTRL = Toggle UI
 
 -- =========================
 -- Services
@@ -12,6 +11,9 @@ local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local TeleportService = game:GetService("TeleportService")
 local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local Terrain = workspace:FindFirstChildOfClass("Terrain")
 
 local player = Players.LocalPlayer
 
@@ -30,6 +32,64 @@ end)
 local autoClick = false
 local intervalMs = 50
 local uiVisible = true
+local lowGraphics = false
+
+-- =========================
+-- Save Original Graphics
+-- =========================
+local originalGraphics = {
+	GlobalShadows = Lighting.GlobalShadows,
+	Brightness = Lighting.Brightness,
+	EnvironmentDiffuseScale = Lighting.EnvironmentDiffuseScale,
+	EnvironmentSpecularScale = Lighting.EnvironmentSpecularScale,
+	OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+-- =========================
+-- Graphics Functions
+-- =========================
+local function applyLowGraphics()
+	Lighting.GlobalShadows = false
+	Lighting.Brightness = 1
+	Lighting.EnvironmentDiffuseScale = 0
+	Lighting.EnvironmentSpecularScale = 0
+	Lighting.OutdoorAmbient = Color3.new(0.5,0.5,0.5)
+
+	for _, v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("PostEffect") then
+			v.Enabled = false
+		end
+	end
+
+	if Terrain then
+		Terrain.WaterWaveSize = 0
+		Terrain.WaterWaveSpeed = 0
+		Terrain.WaterReflectance = 0
+		Terrain.WaterTransparency = 1
+	end
+
+	pcall(function()
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+	end)
+end
+
+local function restoreGraphics()
+	Lighting.GlobalShadows = originalGraphics.GlobalShadows
+	Lighting.Brightness = originalGraphics.Brightness
+	Lighting.EnvironmentDiffuseScale = originalGraphics.EnvironmentDiffuseScale
+	Lighting.EnvironmentSpecularScale = originalGraphics.EnvironmentSpecularScale
+	Lighting.OutdoorAmbient = originalGraphics.OutdoorAmbient
+
+	for _, v in ipairs(Lighting:GetChildren()) do
+		if v:IsA("PostEffect") then
+			v.Enabled = true
+		end
+	end
+
+	pcall(function()
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+	end)
+end
 
 -- =========================
 -- UI
@@ -41,8 +101,8 @@ gui.IgnoreGuiInset = true
 gui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 240, 0, 170)
-frame.Position = UDim2.new(0, 40, 0.4, 0)
+frame.Size = UDim2.new(0,240,0,220)
+frame.Position = UDim2.new(0,40,0.4,0)
 frame.BackgroundColor3 = Color3.fromRGB(28,28,28)
 frame.BorderSizePixel = 0
 frame.Active = true
@@ -53,13 +113,13 @@ Instance.new("UICorner", frame).CornerRadius = UDim.new(0,8)
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1,0,0,32)
 title.BackgroundTransparency = 1
-title.Text = "STUNT | Auto Clicker"
+title.Text = "STUNT | Smart AutoClick"
 title.TextColor3 = Color3.new(1,1,1)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 14
 title.Parent = frame
 
--- Indicator dot
+-- Dot
 local dot = Instance.new("Frame")
 dot.Size = UDim2.new(0,10,0,10)
 dot.Position = UDim2.new(1,-20,0,11)
@@ -67,7 +127,7 @@ dot.BackgroundColor3 = Color3.fromRGB(255,80,80)
 dot.Parent = frame
 Instance.new("UICorner", dot).CornerRadius = UDim.new(1,0)
 
--- Status text
+-- Status
 local status = Instance.new("TextLabel")
 status.Position = UDim2.new(0,0,0,36)
 status.Size = UDim2.new(1,0,0,20)
@@ -78,12 +138,23 @@ status.Font = Enum.Font.Gotham
 status.TextSize = 12
 status.Parent = frame
 
--- Interval input
+-- FPS
+local fpsLabel = Instance.new("TextLabel")
+fpsLabel.Position = UDim2.new(0,0,0,56)
+fpsLabel.Size = UDim2.new(1,0,0,20)
+fpsLabel.BackgroundTransparency = 1
+fpsLabel.Text = "FPS: --"
+fpsLabel.Font = Enum.Font.Gotham
+fpsLabel.TextSize = 12
+fpsLabel.TextColor3 = Color3.fromRGB(120,255,120)
+fpsLabel.Parent = frame
+
+-- Interval
 local inputBox = Instance.new("TextBox")
-inputBox.Position = UDim2.new(0.1,0,0,62)
+inputBox.Position = UDim2.new(0.1,0,0,82)
 inputBox.Size = UDim2.new(0.8,0,0,30)
-inputBox.PlaceholderText = "Interval (ms)"
 inputBox.Text = tostring(intervalMs)
+inputBox.PlaceholderText = "Interval (ms)"
 inputBox.BackgroundColor3 = Color3.fromRGB(45,45,45)
 inputBox.TextColor3 = Color3.new(1,1,1)
 inputBox.Font = Enum.Font.Gotham
@@ -92,9 +163,9 @@ inputBox.ClearTextOnFocus = false
 inputBox.Parent = frame
 Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0,6)
 
--- Rejoin button
+-- Rejoin
 local rejoinBtn = Instance.new("TextButton")
-rejoinBtn.Position = UDim2.new(0.2,0,0,102)
+rejoinBtn.Position = UDim2.new(0.2,0,0,122)
 rejoinBtn.Size = UDim2.new(0.6,0,0,28)
 rejoinBtn.Text = "Rejoin This Server"
 rejoinBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
@@ -103,6 +174,18 @@ rejoinBtn.Font = Enum.Font.GothamBold
 rejoinBtn.TextSize = 12
 rejoinBtn.Parent = frame
 Instance.new("UICorner", rejoinBtn).CornerRadius = UDim.new(0,6)
+
+-- Low Graphics Toggle
+local gfxBtn = Instance.new("TextButton")
+gfxBtn.Position = UDim2.new(0.2,0,0,154)
+gfxBtn.Size = UDim2.new(0.6,0,0,28)
+gfxBtn.Text = "Low Graphics: OFF"
+gfxBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+gfxBtn.TextColor3 = Color3.new(1,1,1)
+gfxBtn.Font = Enum.Font.GothamBold
+gfxBtn.TextSize = 12
+gfxBtn.Parent = frame
+Instance.new("UICorner", gfxBtn).CornerRadius = UDim.new(0,6)
 
 -- Hint
 local hint = Instance.new("TextLabel")
@@ -116,34 +199,24 @@ hint.TextSize = 11
 hint.Parent = frame
 
 -- =========================
--- Drag UI
+-- Drag
 -- =========================
 do
 	local dragging, dragStart, startPos
-
-	title.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+	title.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
-			dragStart = input.Position
+			dragStart = i.Position
 			startPos = frame.Position
 		end
 	end)
-
-	UserInputService.InputEnded:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = false
-		end
+	UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 	end)
-
-	UserInputService.InputChanged:Connect(function(input)
-		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-			local delta = input.Position - dragStart
-			frame.Position = UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
-			)
+	UserInputService.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+			local d = i.Position - dragStart
+			frame.Position = UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
 		end
 	end)
 end
@@ -163,54 +236,50 @@ local function updateStatus()
 	end
 end
 
--- Smart check
 local function canAutoClick()
-	-- Pause kalau menu Roblox kebuka (ESC, Settings, PlayerList)
-	if GuiService.MenuIsOpen then
-		return false
-	end
-
-	-- Pause kalau lagi ngetik (chat / textbox)
-	if UserInputService:GetFocusedTextBox() then
-		return false
-	end
-
+	if GuiService.MenuIsOpen then return false end
+	if UserInputService:GetFocusedTextBox() then return false end
 	return true
 end
 
 -- =========================
--- Input Handling
+-- Input
 -- =========================
-UserInputService.InputBegan:Connect(function(input, gpe)
+UserInputService.InputBegan:Connect(function(i,gpe)
 	if gpe then return end
-
-	if input.KeyCode == Enum.KeyCode.LeftControl then
-		uiVisible = not uiVisible
-		gui.Enabled = uiVisible
-	end
-
-	if input.KeyCode == Enum.KeyCode.F then
+	if i.KeyCode == Enum.KeyCode.F then
 		autoClick = not autoClick
 		updateStatus()
+	elseif i.KeyCode == Enum.KeyCode.LeftControl then
+		uiVisible = not uiVisible
+		gui.Enabled = uiVisible
 	end
 end)
 
 inputBox.FocusLost:Connect(function()
 	local v = tonumber(inputBox.Text)
-	if v and v > 0 then
-		intervalMs = v
-	else
-		inputBox.Text = tostring(intervalMs)
-	end
+	if v and v > 0 then intervalMs = v else inputBox.Text = tostring(intervalMs) end
 end)
 
--- Rejoin same server
 rejoinBtn.MouseButton1Click:Connect(function()
 	TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
 end)
 
+gfxBtn.MouseButton1Click:Connect(function()
+	lowGraphics = not lowGraphics
+	if lowGraphics then
+		applyLowGraphics()
+		gfxBtn.Text = "Low Graphics: ON"
+		gfxBtn.BackgroundColor3 = Color3.fromRGB(60,120,60)
+	else
+		restoreGraphics()
+		gfxBtn.Text = "Low Graphics: OFF"
+		gfxBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+	end
+end)
+
 -- =========================
--- Smart Auto Click Loop
+-- Auto Click Loop
 -- =========================
 task.spawn(function()
 	while true do
@@ -221,3 +290,27 @@ task.spawn(function()
 		task.wait(intervalMs / 1000)
 	end
 end)
+
+-- =========================
+-- FPS Counter
+-- =========================
+do
+	local frames = 0
+	local last = tick()
+	RunService.RenderStepped:Connect(function()
+		frames += 1
+		if tick() - last >= 0.5 then
+			local fps = math.floor(frames / (tick() - last))
+			frames = 0
+			last = tick()
+			fpsLabel.Text = "FPS: "..fps
+			if fps >= 60 then
+				fpsLabel.TextColor3 = Color3.fromRGB(120,255,120)
+			elseif fps >= 40 then
+				fpsLabel.TextColor3 = Color3.fromRGB(255,200,80)
+			else
+				fpsLabel.TextColor3 = Color3.fromRGB(255,90,90)
+			end
+		end
+	end)
+end
